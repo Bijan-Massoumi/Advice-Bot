@@ -1,14 +1,14 @@
 #!/usr/bin/env nodejs
-
+var sqlCall = require('./dataAPI');
 var bodyParser = require('body-parser')
 var express = require('express');
 var request = require('request');
 var app = express();
 
 // parse application/x-www-form-urlencoded
-app.use(bodyParser.urlencoded({ extended: false }))
+app.use(bodyParser.urlencoded({ extended: false }));
 // parse application/json
-app.use(bodyParser.json())
+app.use(bodyParser.json());
 
 var PAGE_ACCESS_TOKEN = "EAAReZBl5ZCcsgBAGKreHyR1Cjn4a0cdqrC4tCmoRNY9TSnNo48f6axka10rDXbb5guPTI8wADbOOGjiGdblRTm8rp3BA7PHvRAH8ZBDpyltyN2nyY5d6xOuSAG5Fj8PZC4Hk3ZAP1aJRzhCzZBGTCrDMHVwPrbhRSXZBn0AKlJeWwZDZD";
 
@@ -52,36 +52,41 @@ app.post('/adviceHook', function (req, res) {
 });
 
 function receivedMessage(event) {
-  var senderID = event.sender.id;
-  console.log(senderID);
-  var recipientID = event.recipient.id;
-  var timeOfMessage = event.timestamp;
-  var message = event.message;
+    var senderID = event.sender.id;
+    var recipientID = event.recipient.id;
+    var timeOfMessage = event.timestamp;
+    var message = event.message;
 
-  console.log("Received message for user %d and page %d at %d with message:", 
+    sqlCall.isInUser(senderID,function(){
+        console.log("is executing")
+        sqlCall.insertToUser(senderID,String(0),String(0),String(0))
+    })
+    
+    
+    console.log("Received message for user %d and page %d at %d with message:", 
     senderID, recipientID, timeOfMessage);
-  console.log(JSON.stringify(message));
+    console.log(JSON.stringify(message));
 
-  var messageId = message.mid;
+    var messageId = message.mid;
 
-  var messageText = message.text;
-  var messageAttachments = message.attachments;
+    var messageText = message.text;
+    var messageAttachments = message.attachments;
 
-  if (messageText) {
+    if (messageText) {
 
-    // If we receive a text message, check to see if it matches a keyword
-    // and send back the example. Otherwise, just echo the text we received.
-    switch (messageText) {
-      case 'generic':
-        sendGenericMessage(senderID);
-        break;
+        // If we receive a text message, check to see if it matches a keyword
+        // and send back the example. Otherwise, just echo the text we received.
+        switch (messageText) {
+          case 'generic':
+            sendGenericMessage(senderID);
+            break;
 
-      default:
-        sendTextMessage(senderID, messageText);
+        default:
+            sendTextMessage(senderID, messageText);
+        }
+    } else if (messageAttachments) {
+        sendTextMessage(senderID, "Message with attachment received");
     }
-  } else if (messageAttachments) {
-    sendTextMessage(senderID, "Message with attachment received");
-  }
 }
 function sendTextMessage(recipientId, messageText) {
   var messageData = {
@@ -92,7 +97,6 @@ function sendTextMessage(recipientId, messageText) {
       text: messageText
     }
   };
-
   callSendAPI(messageData);
 }
 
@@ -129,43 +133,3 @@ var server = app.listen(8080, function (req,res) {
    console.log("Example app listening at http://%s:%s", host, port)
 })
 
-
-
-
-/*
-'use strict'
-
-const express = require('express')
-const bodyParser = require('body-parser')
-const request = require('request')
-const app = express()
-
-app.set('port', 8080)
-
-// Process application/x-www-form-urlencoded
-app.use(bodyParser.urlencoded({extended: false}))
-
-// Process application/json
-app.use(bodyParser.json())
-
-// Index route
-app.get('/', function (req, res) {
-    res.send('Hello world, I am a chat bot')
-})
-
-// for Facebook verification
-app.get('/', function (req, res) {
-    if (req.query['hub.verify_token'] === 'love') {
-        res.send(req.query['hub.challenge'])
-    }
-    res.send('Error, wrong token')
-})
-
-// Spin up the server
-app.listen(app.get('port'), function(req,res) {
-    console.log('running on port', app.get('port'))
-      //res.writeHead(200, {'Content-Type': 'text/plain'});
-      //res.end('Hello Wold\n');
-})
-
-*/
