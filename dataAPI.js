@@ -1,12 +1,12 @@
-var mysql = require('mysql');
-var keys = require('./sensitiveData')
+var mysql = require('mysql'); 
+var keys = require('./sensitiveData') /*Where my passwords are stored*/
 var connection = mysql.createConnection({
   host     : 'localhost',
   user     : 'bmassoumi',
   password : keys.password,
   database : 'userdb'
 });
-module.exports = {
+module.exports = {  //adds a new user to the database
     connection: connection,
     insertToUser: function (ID,numQuestion,numAnswer,numBlocks) {
         var dict = {
@@ -20,7 +20,7 @@ module.exports = {
             if(err) throw err;
         });
     },
-    isInUser: function (ID,next){
+    notInUser: function (ID,next){  //checks if user exists
         console.log("before query")
         connection.query('SELECT * FROM User WHERE ID =' + String(ID),function(err,rows){
             if(err) throw err;

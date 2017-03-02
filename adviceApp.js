@@ -1,5 +1,6 @@
 #!/usr/bin/env nodejs
 var sqlCall = require('./dataAPI');
+var responses = require('./responseProcessor')
 var bodyParser = require('body-parser')
 var express = require('express');
 var request = require('request');
@@ -56,12 +57,6 @@ function receivedMessage(event) {
     var recipientID = event.recipient.id;
     var timeOfMessage = event.timestamp;
     var message = event.message;
-
-    sqlCall.isInUser(senderID,function(){
-        console.log("is executing")
-        sqlCall.insertToUser(senderID,String(0),String(0),String(0))
-    })
-    
     
     console.log("Received message for user %d and page %d at %d with message:", 
     senderID, recipientID, timeOfMessage);
@@ -73,17 +68,16 @@ function receivedMessage(event) {
     var messageAttachments = message.attachments;
 
     if (messageText) {
-
-        // If we receive a text message, check to see if it matches a keyword
-        // and send back the example. Otherwise, just echo the text we received.
-        switch (messageText) {
-          case 'generic':
-            sendGenericMessage(senderID);
-            break;
-
-        default:
-            sendTextMessage(senderID, messageText);
-        }
+        sqlCall.notInUser(senderID,function(){
+            console.log("first use of bot")
+            sqlCall.insertToUser(senderID,String(0),String(0),String(0))
+            sendTextMessage(senderID, responses.firstGreeting);
+            return 0;
+        })
+        //isQuestionResponse() TODO
+        //isAnswerRequest() TODO
+        sendTextMessage(senderID, messageText);
+        
     } else if (messageAttachments) {
         sendTextMessage(senderID, "Message with attachment received");
     }
@@ -120,9 +114,6 @@ function callSendAPI(messageData) {
       console.error(error);
     }
   });  
-}
-function sendGenericMessage(recipientId, messageText) {
-  // To be expanded in later sections
 }
 
 var server = app.listen(8080, function (req,res) {
