@@ -20,14 +20,14 @@ module.exports = {  //adds a new user to the database
             if(err) throw err;
         });
     },
-    notInUser: function (ID,next){  //checks if user exists
-        console.log("before query")
+    notInUser: function (ID,other,next){  //checks if user exists
         connection.query('SELECT * FROM User WHERE ID =' + String(ID),function(err,rows){
             if(err) throw err;
-            console.log("after Query")
             if (rows.length == 0) {
                 console.log("in false")
                 next() 
+            } else {
+                other()
             } 
         });
     }

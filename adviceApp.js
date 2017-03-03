@@ -68,16 +68,13 @@ function receivedMessage(event) {
     var messageAttachments = message.attachments;
 
     if (messageText) {
-        sqlCall.notInUser(senderID,function(){
+        sqlCall.notInUser(senderID,function(){sendTextMessage(senderID,messageText)},function(){
             console.log("first use of bot")
             sqlCall.insertToUser(senderID,String(0),String(0),String(0))
             sendTextMessage(senderID, responses.firstGreeting);
             return 0;
         })
-        //isQuestionResponse() TODO
-        //isAnswerRequest() TODO
-        sendTextMessage(senderID, messageText);
-        
+        sendOptionButtons(senderID);
     } else if (messageAttachments) {
         sendTextMessage(senderID, "Message with attachment received");
     }
@@ -93,7 +90,49 @@ function sendTextMessage(recipientId, messageText) {
   };
   callSendAPI(messageData);
 }
+function sendOptionButtons(recipientId){
+    message = {
+        attachment: {
+            type: "template",
+            payload: {
+                template_type:"generic",
+                elements: [{
+                    title: ":D",
+                    buttons: [
+                        {   
+                            type: "postback",
+                            title: "Ask for Advice/Vent",
+                            payload: "question"
+                        },
+                        {
+                            type: "postback",
+                            title: "Give Feedback",
+                            payload: "answer"
+                        }
+                    ]
+                }]
+            }
+        } 
+    }
+  sendMessage(recipientId,message);
+}
 
+function sendMessage(recipientId, message) {
+  console.log("in the button function");
+  request({
+    url: "https://graph.facebook.com/v2.6/me/messages",
+    qs: {access_token: PAGE_ACCESS_TOKEN},
+    method: "POST",
+    json: {
+      recipient: {id: recipientId},
+      message: message
+    }
+  }, function(error, response,body) {
+
+      console.log(response);
+    
+  });
+}
 function callSendAPI(messageData) {
   request({
     uri: 'https://graph.facebook.com/v2.6/me/messages',
