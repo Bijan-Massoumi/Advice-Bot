@@ -36,10 +36,21 @@ app.post('/adviceHook', function (req, res) {
       entry.messaging.forEach(function(event) {
         if (event.message) {
           console.log(event.message);
-          receivedMessage(event);
+          receivedTextMessage(event);
+        } else if (event.postback){
+            car choice = event.postback.payload
+            switch(choice){
+                case "answer":
+                    serveQuestion(event.sender.id)
+                case "question":
+                    
+                
+            }
         } else {
-          console.log("Webhook received unknown event: ", event);
+            console.log("Webhook received unknown event: ", event);
         }
+        
+        
       });
     });
 
@@ -52,7 +63,7 @@ app.post('/adviceHook', function (req, res) {
   }
 });
 
-function receivedMessage(event) {
+function receivedTextMessage(event) {
     var senderID = event.sender.id;
     var recipientID = event.recipient.id;
     var timeOfMessage = event.timestamp;
@@ -91,48 +102,37 @@ function sendTextMessage(recipientId, messageText) {
   callSendAPI(messageData);
 }
 function sendOptionButtons(recipientId){
-    message = {
-        attachment: {
-            type: "template",
-            payload: {
-                template_type:"generic",
-                elements: [{
-                    title: ":D",
-                    buttons: [
-                        {   
-                            type: "postback",
-                            title: "Ask for Advice/Vent",
-                            payload: "question"
-                        },
-                        {
-                            type: "postback",
-                            title: "Give Feedback",
-                            payload: "answer"
-                        }
-                    ]
-                }]
-            }
-        } 
+    messageData = {
+        recipient: {
+            id: recipientId
+        },
+        message: {
+            attachment: {
+                type: "template",
+                payload: {
+                    template_type:"generic",
+                    elements: [{
+                        title: ":D",
+                        buttons: [
+                            {   
+                                type: "postback",
+                                title: "Ask for Advice/Vent",
+                                payload: "question"
+                            },
+                            {
+                                type: "postback",
+                                title: "Give Feedback",
+                                payload: "answer"
+                            }
+                        ]
+                    }]
+                }
+            } 
+        }   
     }
-  sendMessage(recipientId,message);
+  callSendAPI(messageData);
 }
 
-function sendMessage(recipientId, message) {
-  console.log("in the button function");
-  request({
-    url: "https://graph.facebook.com/v2.6/me/messages",
-    qs: {access_token: PAGE_ACCESS_TOKEN},
-    method: "POST",
-    json: {
-      recipient: {id: recipientId},
-      message: message
-    }
-  }, function(error, response,body) {
-
-      console.log(response);
-    
-  });
-}
 function callSendAPI(messageData) {
   request({
     uri: 'https://graph.facebook.com/v2.6/me/messages',
