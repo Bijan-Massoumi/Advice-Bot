@@ -30,7 +30,19 @@ module.exports = {  //adds a new user to the database
                 other()
             } 
         });
+    },
+    addQuestion: function (ID,question,next){
+        var dict = {
+            ID:ID,
+            questionText: question,
+            questionIndex: 0,
+            timesDistributed: 0
+        }
+        connection.query('INSERT INTO Questions SET ?',dict,function(err,res){
+            if(err) throw err;
+        });
     }
+
 };
 /*
 connection.connect();

@@ -4,6 +4,7 @@ var responses = require('./responseProcessor')
 var bodyParser = require('body-parser')
 var express = require('express');
 var request = require('request');
+var globals = require('./globals')
 var app = express();
 
 // parse application/x-www-form-urlencoded
@@ -18,7 +19,7 @@ app.get('/adviceHook', function (req, res) {
         res.send(req.query['hub.challenge'])
     }
     else {
-        res.send('Hello World')
+        res.send('Webhook for advice bot')
     };
 })
 
@@ -38,19 +39,19 @@ app.post('/adviceHook', function (req, res) {
           console.log(event.message);
           receivedTextMessage(event);
         } else if (event.postback){
-            car choice = event.postback.payload
+            var choice = event.postback.payload
             switch(choice){
                 case "answer":
-                    serveQuestion(event.sender.id)
+                  //serveQuestion(event.sender.id)
+                  break;
                 case "question":
-                    
-                
+                  sendTextMessage(event.sender.id,"Ok, go ahead!")
+                  globals.expectingQuestion = true
+                  break;
             }
         } else {
             console.log("Webhook received unknown event: ", event);
         }
-        
-        
       });
     });
 
@@ -78,7 +79,7 @@ function receivedTextMessage(event) {
     var messageText = message.text;
     var messageAttachments = message.attachments;
 
-    if (messageText) {
+    if (messageText && !globals.expectingQuestion) {
         sqlCall.notInUser(senderID,function(){sendTextMessage(senderID,messageText)},function(){
             console.log("first use of bot")
             sqlCall.insertToUser(senderID,String(0),String(0),String(0))
@@ -86,6 +87,13 @@ function receivedTextMessage(event) {
             return 0;
         })
         sendOptionButtons(senderID);
+    } else if (messageText && globals.expectingQuestion) {
+        responses.isValidQuestion(messageText,function(){sendTextMessage(senderID,responses.questionRedo)},function(){
+          sqlCall.addQuestion(senderID,messageText);
+          sendTextMessage(senderID,responses.questionConfirmation)
+          globals.expectingQuestion = false
+        })
+
     } else if (messageAttachments) {
         sendTextMessage(senderID, "Message with attachment received");
     }
