@@ -1,5 +1,5 @@
 #!/usr/bin/env nodejs
-var sqlCall = require('./dataAPI');
+var dataHelp = require('./dataAPI');
 var responses = require('./responseProcessor')
 var bodyParser = require('body-parser')
 var express = require('express');
@@ -36,30 +36,30 @@ app.post('/adviceHook', function (req, res) {
       // Iterate over each messaging event
       entry.messaging.forEach(function(event) {
         if (event.message) {
-          console.log(event.message);
-          receivedTextMessage(event);
+            console.log(event.message);
+            receivedTextMessage(event);
         } else if (event.postback){
             var choice = event.postback.payload
             switch(choice){
-                case "answer":
-                  //serveQuestion(event.sender.id)
-                  break;
                 case "question":
-                  sendTextMessage(event.sender.id,"Ok, go ahead!")
-                  globals.expectingQuestion = true
-                  break;
+                    sendTextMessage(event.sender.id,"Ok, go ahead!")
+                    globals.expectingQuestion[event.sender.id] = true
+                    break;
+                case "answer":
+                    serveQuestion(event.sender.id,function(){
+                            sendTextMessage(event.sender.id,responses.noAvailableQuestion)},
+                            function(qID,qText) {
+                                globals.currentlyAnswering[event.sender.id] = [qID,qText];
+                                sendTextMessage(event.sender.id,responses.responseInstructions + '\n\n' + qText);
+                            }
+                    )   
+                    break;
             }
         } else {
             console.log("Webhook received unknown event: ", event);
         }
       });
     });
-
-    // Assume all went well.
-    //
-    // You must send back a 200, within 20 seconds, to let us know
-    // you've successfully received the callback. Otherwise, the request
-    // will time out and we will keep trying to resend.
     res.sendStatus(200);
   }
 });
@@ -79,24 +79,53 @@ function receivedTextMessage(event) {
     var messageText = message.text;
     var messageAttachments = message.attachments;
 
-    if (messageText && !globals.expectingQuestion) {
-        sqlCall.notInUser(senderID,function(){sendTextMessage(senderID,messageText)},function(){
-            console.log("first use of bot")
-            sqlCall.insertToUser(senderID,String(0),String(0),String(0))
-            sendTextMessage(senderID, responses.firstGreeting);
-            return 0;
+    
+    dataHelp.notInUser(senderID,function(){
+        console.log("first use of bot")
+        dataHelp.insertToUser(senderID,String(0),String(0),String(0))
+        sendOptionButtons(senderID,responses.firstGreeting,true);
+        return 0;
+    })
+    
+   if (globals.currentlyAnswering[event.sender.id] && messageText.startsWith("RE")){
+        console.log(globals.currentlyAnswering[event.sender.id][0])
+        console.log(messageText)
+        sendTextMessage(globals.currentlyAnswering[event.sender.id][0],messageText)
+        sendTextMessage(event.sender.id,"Ok, I sent your reply!")
+        return 0
+    }else if (!globals.expectingQuestion[senderID]){ 
+        dataHelp.hasOutstandingQuestions(senderID,function(){sendOptionButtons(senderID,responses.cannedResponse,true)},function(){
+            sendOptionButtons(senderID,responses.answerRequest,false);
+            return 0
+        });
+    } else if (globals.expectingQuestion[senderID]) {
+        responses.isValidQuery(messageText,function(){sendTextMessage(senderID,responses.questionRedo)},function(){
+          dataHelp.addQuestion(senderID,messageText);
+          sendOptionButtons(senderID,responses.questionConfirmation,false)
+          globals.expectingQuestion[senderID] = false
         })
-        sendOptionButtons(senderID);
-    } else if (messageText && globals.expectingQuestion) {
-        responses.isValidQuestion(messageText,function(){sendTextMessage(senderID,responses.questionRedo)},function(){
-          sqlCall.addQuestion(senderID,messageText);
-          sendTextMessage(senderID,responses.questionConfirmation)
-          globals.expectingQuestion = false
-        })
-
     } else if (messageAttachments) {
-        sendTextMessage(senderID, "Message with attachment received");
+        sendTextMessage(senderID, "Wowza");
     }
+}
+function serveQuestion(senderID,other,next){
+    var question = globals.questionQueue.shift()
+    if (question && globals.questionQueue.length > 1 && question['ID'] == senderID) {
+        var temp = globals.questionQueue.pop()
+        globals.questionQueue.unshift(question)
+        question = temp
+    } else if (question && globals.questionQueue.length == 0 && question['ID'] == senderID){
+        globals.questionQueue.unshift(question);
+        other()
+        return 0
+    }
+    
+    if(question){
+        next(question['ID'],question['questionText'])
+    } else {
+        other()
+    }
+    
 }
 function sendTextMessage(recipientId, messageText) {
   var messageData = {
@@ -109,7 +138,25 @@ function sendTextMessage(recipientId, messageText) {
   };
   callSendAPI(messageData);
 }
-function sendOptionButtons(recipientId){
+function sendOptionButtons(recipientId,desiredText,bothAllowed){
+    if (bothAllowed){
+        var options = [{   
+            type: "postback",
+            title: "Ask for Advice/Vent",
+            payload: "question"
+        },
+        {
+            type: "postback",
+            title: "Give Feedback",
+            payload: "answer"
+        }]
+    } else {
+        var options = [{
+            type: "postback",
+            title: "Give Feedback",
+            payload: "answer"
+        }]
+    }
     messageData = {
         recipient: {
             id: recipientId
@@ -118,22 +165,9 @@ function sendOptionButtons(recipientId){
             attachment: {
                 type: "template",
                 payload: {
-                    template_type:"generic",
-                    elements: [{
-                        title: ":D",
-                        buttons: [
-                            {   
-                                type: "postback",
-                                title: "Ask for Advice/Vent",
-                                payload: "question"
-                            },
-                            {
-                                type: "postback",
-                                title: "Give Feedback",
-                                payload: "answer"
-                            }
-                        ]
-                    }]
+                    template_type:"button",
+                    text: desiredText,
+                    buttons: options
                 }
             } 
         }   
@@ -157,7 +191,7 @@ function callSendAPI(messageData) {
         messageId, recipientId);
     } else {
       console.error("Unable to send message.");
-      console.error(response);
+      //console.error(response);
       console.error(error);
     }
   });  
