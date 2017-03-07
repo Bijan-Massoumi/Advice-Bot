@@ -25,34 +25,38 @@ app.get('/adviceHook', function (req, res) {
 
 app.post('/adviceHook', function (req, res) {
   var data = req.body;
-  // Make sure this is a page subscription
+  
   if (data.object === 'page') {
     
     // Iterate over each entry - there may be multiple if batched
     data.entry.forEach(function(entry) {
       var pageID = entry.id;
       var timeOfEvent = entry.time;
-
-      // Iterate over each messaging event
-      entry.messaging.forEach(function(event) {
-        if (event.message) {
+      
+    // Iterate over each messaging event
+    entry.messaging.forEach(function(event) {
+        
+        dataHelp.notInUser(event.sender.id,function(){
+            console.log("first use of bot")
+            dataHelp.insertToUser(event.sender.id,String(0),String(0),String(0))
+            sendOptionButtons(event.sender.id,responses.firstGreeting,true);
+            return 0;
+        })
+  
+        if (event.message) {   //normal text message
             console.log(event.message);
             receivedTextMessage(event);
-        } else if (event.postback){
+        } else if (event.postback){  //for button presses
             var choice = event.postback.payload
             switch(choice){
-                case "question":
-                    sendTextMessage(event.sender.id,"Ok, go ahead!")
-                    globals.expectingQuestion[event.sender.id] = true
-                    break;
                 case "answer":
-                    serveQuestion(event.sender.id,function(){
-                            sendTextMessage(event.sender.id,responses.noAvailableQuestion)},
-                            function(qID,qText) {
-                                globals.currentlyAnswering[event.sender.id] = [qID,qText];
-                                sendTextMessage(event.sender.id,responses.responseInstructions + '\n\n' + qText);
-                            }
-                    )   
+                    serveQuestion(event.sender.id)
+                    break;
+                case "question":
+                    takeQuestion(event.sender.id)
+                    break;
+                case "cancel":
+                    deleteQuestions(event.sender.id)
                     break;
             }
         } else {
@@ -75,57 +79,58 @@ function receivedTextMessage(event) {
     console.log(JSON.stringify(message));
 
     var messageId = message.mid;
-
     var messageText = message.text;
     var messageAttachments = message.attachments;
 
     
-    dataHelp.notInUser(senderID,function(){
-        console.log("first use of bot")
-        dataHelp.insertToUser(senderID,String(0),String(0),String(0))
-        sendOptionButtons(senderID,responses.firstGreeting,true);
-        return 0;
+    dataHelp.isAnsweringRando(event.sender.id,function(row){
+        sendTextMessage(row['qID'],responses.foundAnswer + " '%s'".replace('%s',row['text']) +  "\n\n'%s'".replace('%s',messageText))
+        var elseCallBack = function(){sendTextMessage(event.sender.id,"Ok,sent your response.")}
+        dataHelp.hasOutstandingQuestions(event.sender.id,elseCallBack,function(){
+            sendTextMessage(event.sender.id,"Ok,sent your response.")        
+        })
+        dataHelp.removeRandoConnection(senderID,row['qID'])
+        globals.isConsideringPenPals[row['qID']] = senderID
     })
     
-   if (globals.currentlyAnswering[event.sender.id] && messageText.startsWith("RE")){
-        console.log(globals.currentlyAnswering[event.sender.id][0])
-        console.log(messageText)
-        sendTextMessage(globals.currentlyAnswering[event.sender.id][0],messageText)
-        sendTextMessage(event.sender.id,"Ok, I sent your reply!")
-        return 0
-    }else if (!globals.expectingQuestion[senderID]){ 
+    //need to add penpal stuff
+    if (!globals.expectingQuestion[senderID]){ 
         dataHelp.hasOutstandingQuestions(senderID,function(){sendOptionButtons(senderID,responses.cannedResponse,true)},function(){
             sendOptionButtons(senderID,responses.answerRequest,false);
             return 0
         });
     } else if (globals.expectingQuestion[senderID]) {
         responses.isValidQuery(messageText,function(){sendTextMessage(senderID,responses.questionRedo)},function(){
-          dataHelp.addQuestion(senderID,messageText);
-          sendOptionButtons(senderID,responses.questionConfirmation,false)
-          globals.expectingQuestion[senderID] = false
+            dataHelp.addQuestion(senderID,messageText,0);
+            sendOptionButtons(senderID,responses.questionConfirmation,false)
+            globals.expectingQuestion[senderID] = false
         })
     } else if (messageAttachments) {
         sendTextMessage(senderID, "Wowza");
     }
 }
-function serveQuestion(senderID,other,next){
-    var question = globals.questionQueue.shift()
-    if (question && globals.questionQueue.length > 1 && question['ID'] == senderID) {
-        var temp = globals.questionQueue.pop()
-        globals.questionQueue.unshift(question)
-        question = temp
-    } else if (question && globals.questionQueue.length == 0 && question['ID'] == senderID){
-        globals.questionQueue.unshift(question);
-        other()
-        return 0
+function serveQuestion(senderID){
+    var elseCallBack = function(){sendOptionButtons(senderID,responses.noAvailableQuestion,true)}
+    var noQuestionCall = function(){dataHelp.hasOutstandingQuestions(senderID,elseCallBack,function(){
+        sendOptionButtons(senderID,responses.noAvailableQuestion,false)
+    }) }
+    dataHelp.getQuestion(senderID,noQuestionCall,function(row){
+        dataHelp.addContactPair(senderID,row["ID"])
+        sendTextMessage(senderID,responses.responseInstructions + '\n\n"%s"'.replace('%s',row['questionText']))
+        qAvail = true
+    })
+}
+function takeQuestion(senderID){
+    var ifNoQuestion = function(){
+        sendTextMessage(senderID,"Ok, go ahead!")
+        globals.expectingQuestion[senderID] = true
     }
-    
-    if(question){
-        next(question['ID'],question['questionText'])
-    } else {
-        other()
-    }
-    
+    var ifQuestion = function(){sendOptionButtons(senderID,responses.maxQuestions,false)}
+    dataHelp.hasOutstandingQuestions(senderID, ifNoQuestion,ifQuestion)
+}
+function deleteQuestions(senderID){
+    var callback = function(){sendOptionButtons(senderID,responses.canceledQuestions,true)}
+    dataHelp.deleteOpenQuestions(senderID,callback)
 }
 function sendTextMessage(recipientId, messageText) {
   var messageData = {
@@ -152,6 +157,11 @@ function sendOptionButtons(recipientId,desiredText,bothAllowed){
         }]
     } else {
         var options = [{
+            type: "postback",
+            title: "Cancel Open Vents",
+            payload: "cancel"
+        },
+        {       
             type: "postback",
             title: "Give Feedback",
             payload: "answer"

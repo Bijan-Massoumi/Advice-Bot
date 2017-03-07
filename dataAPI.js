@@ -49,20 +49,68 @@ module.exports = {  //adds a new user to the database
             timesDistributed: 0,
             questionID: generateUUID()
         }
-        globals.questionQueue.push(dict)
+        connection.query('INSERT INTO Questions SET ?',dict,function(err,res){
+            if (err) throw err;
+        })
+                  
     },
     hasOutstandingQuestions: function(ID,other,next){
-        var count = 0;
-        globals.questionQueue.forEach(function(element){
-            if (element['ID'] == ID){count++}
+        connection.query('SELECT * FROM Questions WHERE ID =' + String(ID),function(err,rows){            
+            if (rows.length >= globals.maxAllowedQuestions){
+                next()
+            } else {
+                other()
+            }
         })
-        if (count >= globals.maxAllowedQuestions){
-            next()
-        } else {
-            other()
+    },
+    getQuestion: function(senderID,other,next){
+        var questionText = "SELECT ID,questionText FROM ((SELECT *  FROM Questions WHERE ID != " + String(senderID) + ") AS T) WHERE  timesDistributed = (SELECT MIN(timesDistributed) FROM Questions)limit 1;"
+        connection.query(questionText,function(err,row){
+            if (row.length > 0){
+               next(row[0]) 
+            } else {
+                other()
+            }   
+        })
+    },
+    addContactPair: function(aID,qID){
+        var dict = {
+            aID: aID,
+            qID: qID
         }
+        connection.query("SELECT * FROM CurrentlyAnswering WHERE aID = " + aID + " AND qID = " + qID,function(err,row){
+            if (row.length == 0){
+                console.log("in addcontactpair")
+                connection.query('INSERT INTO CurrentlyAnswering SET ?',dict,function(err,res){
+                    if(err) throw err;
+                }); 
+            }
+        })
+    },
+    isAnsweringRando: function(aID,next){
+        returnDict = {}
+        queryText = "SELECT qID FROM CurrentlyAnswering WHERE aID = "+ aID + ";";
+        connection.query(queryText,function(err,row){
+            if(row.length > 0){
+                returnDict['qID'] = row[0]['qID']
+                connection.query("SELECT questionText FROM Questions WHERE ID = " + returnDict['qID'],function(err,row){
+                    returnDict['text'] = row[0]['questionText']
+                    next(returnDict)
+                })
+            }
+        })
+    },
+    removeRandoConnection: function(aID,qID){
+        connection.query("DELETE FROM CurrentlyAnswering WHERE aID = "+aID+" And qID = " + qID+ ";",function(err,row){
+            if(err) throw err;
+        })
+    },
+    deleteOpenQuestions: function(senderID,next){
+        connection.query("DELETE FROM Questions WHERE ID = " + senderID,function(err,res){
+            next()
+        })
     }
-};
+}
 /*
 connection.connect();
 connection.query('SELECT * FROM User',function(err,rows){
