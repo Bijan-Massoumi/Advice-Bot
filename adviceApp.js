@@ -35,7 +35,7 @@ app.post('/adviceHook', function (req, res) {
       
     // Iterate over each messaging event
     entry.messaging.forEach(function(event) {
-        
+        //if new user
         dataHelp.notInUser(event.sender.id,function(){
             console.log("first use of bot")
             dataHelp.insertToUser(event.sender.id,String(0),String(0),String(0))
@@ -58,9 +58,14 @@ app.post('/adviceHook', function (req, res) {
                 case "cancel":
                     deleteQuestions(event.sender.id)
                     break;
+                case "block":
+                    var callback = function(){sendTextMessage(event.sender.id,"User has been blocked")}
+                    dataHelp.blockUser(event.sender.id,globals.isConsideringPenPals[event.sender.id],callback)
+                    globals.isConsideringPenPals[event.sender.id] = ""
+                    break
             }
         } else {
-            console.log("Webhook received unknown event: ", event);
+            console.log("Webhook received attachment event: ", event);
         }
       });
     });
@@ -84,7 +89,7 @@ function receivedTextMessage(event) {
 
     if (globals.expectingAnswer[senderID]){
         dataHelp.isAnsweringRando(senderID,function(){sendTextMessage(senderID,responses.questionerCanceled)},function(row){
-            sendTextMessage(row['qID'],responses.foundAnswer + " '%s'".replace('%s',row['text']) +  "\n\n'%s'".replace('%s',messageText))
+            sendAnswerButtons(row['qID'],responses.foundAnswer + " '%s'".replace('%s',row['text']) +  "\n\n'%s'".replace('%s',messageText))
             var elseCallBack = function(){sendTextMessage(senderID,"Ok,sent your response.")}
             dataHelp.hasOutstandingQuestions(senderID,elseCallBack,function(){
                 sendTextMessage(senderID,"Ok,sent your response.")        
@@ -186,6 +191,34 @@ function sendOptionButtons(recipientId,desiredText,bothAllowed){
         }   
     }
   callSendAPI(messageData);
+}
+function sendAnswerButtons(recipientId,desiredText){
+    var options = [{
+        type: "postback",
+        title: "Block Writer",
+        payload: "block"
+    },
+    {       
+        type: "postback",
+        title: "Add As PenPal",
+        payload: "PenPal"
+    }]
+    messageData = {
+    recipient: {
+        id: recipientId
+    },
+    message: {
+        attachment: {
+            type: "template",
+            payload: {
+                template_type:"button",
+                text: desiredText,
+                buttons: options
+                }
+            } 
+        }   
+    }  
+    callSendAPI(messageData); 
 }
 
 function callSendAPI(messageData) {
