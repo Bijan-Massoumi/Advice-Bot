@@ -134,6 +134,17 @@ module.exports = {  //adds a new user to the database
         connection.query("INSERT INTO HasRead SET ?",dict,function(err,res){
             if (err) throw err
         })
+    },
+    blockUser: function(userID,bannedID,next){
+        dict = {
+            userID:userID,
+            bannedID:bannedID
+
+        }
+        connection.query("INSERT INTO UserBlackList SET ?",dict,function(err,res){
+            if (err) throw err
+            next()
+        })
     }
 }
 /*
