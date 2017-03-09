@@ -16,6 +16,7 @@ module.exports = {
     following commands (will insert commands)  before your response.",
     foundAnswer: "Hey, I found you a response to your open question:",
     canceledQuestions: "Your old questions are out the window! feel free to ask away!",
+    questionerCanceled: "The person your responding to has canceled open vents.",
     
     isValidQuery: function(text,other,next){ //add more sophisticated check later
         var n = text.length;

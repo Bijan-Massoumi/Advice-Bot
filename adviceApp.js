@@ -82,17 +82,18 @@ function receivedTextMessage(event) {
     var messageText = message.text;
     var messageAttachments = message.attachments;
 
-    
-    dataHelp.isAnsweringRando(event.sender.id,function(row){
-        sendTextMessage(row['qID'],responses.foundAnswer + " '%s'".replace('%s',row['text']) +  "\n\n'%s'".replace('%s',messageText))
-        var elseCallBack = function(){sendTextMessage(event.sender.id,"Ok,sent your response.")}
-        dataHelp.hasOutstandingQuestions(event.sender.id,elseCallBack,function(){
-            sendTextMessage(event.sender.id,"Ok,sent your response.")        
+    if (globals.expectingAnswer[senderID]){
+        dataHelp.isAnsweringRando(senderID,function(){sendTextMessage(senderID,responses.questionerCanceled)},function(row){
+            sendTextMessage(row['qID'],responses.foundAnswer + " '%s'".replace('%s',row['text']) +  "\n\n'%s'".replace('%s',messageText))
+            var elseCallBack = function(){sendTextMessage(senderID,"Ok,sent your response.")}
+            dataHelp.hasOutstandingQuestions(senderID,elseCallBack,function(){
+                sendTextMessage(senderID,"Ok,sent your response.")        
+            })
+            dataHelp.removeRandoConnection(senderID,row['qID'])
+            globals.expectingAnswer[senderID] = false
+            globals.isConsideringPenPals[row['qID']] = senderID
         })
-        dataHelp.removeRandoConnection(senderID,row['qID'])
-        globals.isConsideringPenPals[row['qID']] = senderID
-    })
-    
+    }
     //need to add penpal stuff
     if (!globals.expectingQuestion[senderID]){ 
         dataHelp.hasOutstandingQuestions(senderID,function(){sendOptionButtons(senderID,responses.cannedResponse,true)},function(){
@@ -113,12 +114,14 @@ function serveQuestion(senderID){
     var elseCallBack = function(){sendOptionButtons(senderID,responses.noAvailableQuestion,true)}
     var noQuestionCall = function(){dataHelp.hasOutstandingQuestions(senderID,elseCallBack,function(){
         sendOptionButtons(senderID,responses.noAvailableQuestion,false)
-    }) }
+    })} 
     dataHelp.getQuestion(senderID,noQuestionCall,function(row){
         dataHelp.addContactPair(senderID,row["ID"])
+        dataHelp.addHasRead(senderID,row["questionID"])
+        globals.expectingAnswer[senderID] = true
         sendTextMessage(senderID,responses.responseInstructions + '\n\n"%s"'.replace('%s',row['questionText']))
-        qAvail = true
     })
+    
 }
 function takeQuestion(senderID){
     var ifNoQuestion = function(){
@@ -206,12 +209,8 @@ function callSendAPI(messageData) {
     }
   });  
 }
-
 var server = app.listen(8080, function (req,res) {
    var host = server.address().address
-   var port = server.address().port
-
-   
+   var port = server.address().port 
    console.log("Example app listening at http://%s:%s", host, port)
-})
-
+});

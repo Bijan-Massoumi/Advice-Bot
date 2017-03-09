@@ -64,8 +64,10 @@ module.exports = {  //adds a new user to the database
         })
     },
     getQuestion: function(senderID,other,next){
-        var questionText = "SELECT ID,questionText FROM ((SELECT *  FROM Questions WHERE ID != " + String(senderID) + ") AS T) WHERE  timesDistributed = (SELECT MIN(timesDistributed) FROM Questions)limit 1;"
+        var questionText = "SELECT ID,questionText,questionID,MIN(timesDistributed) tDist FROM ((SELECT * FROM Questions\
+            WHERE ID != " +senderID +" AND questionID NOT IN (SELECT questionID FROM HasRead WHERE aID = " + senderID +" )) AS T ) GROUP BY ID,questionText,questionID limit 1;"
         connection.query(questionText,function(err,row){
+            console.log(questionText)
             if (row.length > 0){
                next(row[0]) 
             } else {
@@ -87,7 +89,7 @@ module.exports = {  //adds a new user to the database
             }
         })
     },
-    isAnsweringRando: function(aID,next){
+    isAnsweringRando: function(aID,other,next){
         returnDict = {}
         queryText = "SELECT qID FROM CurrentlyAnswering WHERE aID = "+ aID + ";";
         connection.query(queryText,function(err,row){
@@ -97,6 +99,8 @@ module.exports = {  //adds a new user to the database
                     returnDict['text'] = row[0]['questionText']
                     next(returnDict)
                 })
+            } else {
+                other()
             }
         })
     },
@@ -106,8 +110,29 @@ module.exports = {  //adds a new user to the database
         })
     },
     deleteOpenQuestions: function(senderID,next){
-        connection.query("DELETE FROM Questions WHERE ID = " + senderID,function(err,res){
-            next()
+        connection.query("SELECT questionID FROM Questions WHERE ID = " + senderID,function(err,rows){
+            rows.forEach(function(tuple){
+                var qText = "DELETE FROM HasRead WHERE questionID = "+ '"%s"'.replace("%s",tuple['questionID'])
+                console.log(qText)
+                connection.query(qText ,function(err,res){
+                    if (err) throw err
+                }) 
+            })
+        })
+        connection.query("DELETE FROM Questions WHERE ID = " + senderID,function(err,res){    
+        })
+        connection.query("DELETE FROM CurrentlyAnswering WHERE qID = " + senderID,function(err,res){
+        })
+
+        next()
+    },
+    addHasRead: function(aID,questionID) {
+        dict = {
+            aID: aID,
+            questionID:questionID
+        }
+        connection.query("INSERT INTO HasRead SET ?",dict,function(err,res){
+            if (err) throw err
         })
     }
 }
