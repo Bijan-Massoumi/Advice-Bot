@@ -18,9 +18,10 @@ module.exports = {
     canceledQuestions: "Your old questions are out the window! feel free to ask away!",
     questionerCanceled: "The person your responding to has canceled open vents.",
     
-    isValidQuery: function(text,other,next){ //add more sophisticated check later
+    // TODO: add more sophisticated check later
+    isValidQuery: function(text, other, next){ 
         var n = text.length;
-        if(n > 5){
+        if(n > 5) {
             next()
         } else {
             other()
